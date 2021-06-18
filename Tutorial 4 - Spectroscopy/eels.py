@@ -1,0 +1,1872 @@
+"""
+==================
+Fitting Functions:
+==================
+linear(energy, a, b): a*energy + b
+
+powerlaw(energy, c, r): c*energy**(-r)
+
+lcpowerlaw(energy, c1, r1, c2, r2): c1*energy**(-r1) + c2*energy**(-r2)
+
+exponential(energy,a,b): a*np.exp(-b*energy)
+
+qrnorm(A,b): Solve systems of linear equations Ax = b for x
+
+=========================
+Energy-Channel Functions:
+=========================
+find_nearest(array, value): Find array index corresponding to value
+
+eVtoCh(energy, array): Find nearest array index given energy
+
+ChtoeV(channel, array): Find energy given array index
+
+========================
+Loading and Corrections:
+========================
+specload(file, norm = False, type = "1",show=True):
+    Uses hyperspy.api to load SI - information at http://hyperspy.org/hyperspy-doc/current/api/hyperspy.api.html
+    Input:
+    file - file location
+    norm - Boolean, Normalize SI data. Default = False
+    show - Boolean, Displays params. Default = True
+
+    Outputs:
+    energy - energy axis of spectra
+    rawSI.data - 3D SI array
+    pxscale - pixel size (check params for scale)
+    disp - energy resolution
+    params - axes_manager of file
+    type - which version of DM you are using; type 1 works on data from the Titan, type 2 from the Kraken
+
+
+specload_dual(file, norm = False, type = "1"):
+    Uses hyperspy.api to load SI - information at http://hyperspy.org/hyperspy-doc/current/api/hyperspy.api.html
+    Input:
+    file - file location
+    norm - Boolean, Normalize SI data. Default = False
+
+    Outputs:
+    energy - energy axis of spectra
+    rawSI.data - 3D SI array
+    pxscale - pixel size (check params for scale)
+    disp - energy resolution
+    params - axes_manager of file
+    type - which version of DM you are using; type 1 works on data from the Titan, type 2 from the Kraken
+
+bin_ndarray(ndarray, bin_factors, operation='sum'):
+    Bins an ndarray in all axes based on the bin_size array, by summing or
+        averaging. Bin_size is expected to be an array with length 3, one element for the x, y and z binning.
+
+    Number of output dimensions must match number of input dimensions and
+        new axes must divide old ones.
+
+saveTiff(array,filename,bits=16):
+    Save array as tiff (default Uint 16 bit).
+
+readTiffStack(filename):
+    Read in Tiff file.
+
+load_bsub(file):
+    Load the background subtracted data. This function assumes that the npz file contains a background subtracted spectrum named 'bsub', an energy axis named 'energy' and edge parameters.
+    The edge input notation is edge=[fit_start_ev,fit_end_ev,integration_start,integration_end,edge_name].
+
+dark_sub(SI,specaq,darkaq,darkdm3=""):
+    Provide an array of a dark spectra acquisition to perform a dark correction on your data set.
+	Inputs:
+	SI - SI
+    dark - Dark SI array
+	specaq - spectrum acqusition time
+	darkaq - dark acquisition time
+
+	Outputs:
+	corrected_spectrum - dark substracted sum spectrum
+	corrected_raw - dark subtracted SI
+	dark_spectrum - dark sum spectrum
+
+dark_subtraction_correction(raw_data,energy_axis,edge,**kwargs):
+    This function can be used to perform a dark subtraction if you have vacuum pixels in your SI.
+    Calculates a new dark spectrum to subtract from each pixel.
+    Inputs:
+    raw_data - SI
+    energy_axis - corresponding energy axis
+    edge - edge parameter containing fit window in eV. This will work better if you define this energy range as the entire energy range of the SI.
+    mask - boolean array. True where there is vacuum
+    threshold - maximum average counts in fit window to be considered vacuum pixel
+
+    Outputs:
+    data - dark subtracted SI
+    darkspec - average dark spectrum subtracted from each pixel
+
+zlp_shifts(LL_SI,energy):
+    For Dual EELS data sets. Load in the Low loss SI and use this function to correct energy drift in low mag EELS maps.
+    Inputs:
+    LL_SI- low loss SI
+    energy- corresponding energy axis
+
+    Outputs:
+    S- shift matrix
+    shift_LL- shifted low loss SI
+
+shift_coreloss(CL_SI,S):
+    For Dual EELS data sets. Use the shift matrix generated in zlp_shifts to correct energy drift in core loss SI.
+    Inputs:
+    CL_SI- core loss SI
+    S- shift matrix
+
+    Outputs:
+    shift_CL- shifted core loss SI
+
+SIshift(SI,energy_axis,**kwargs):
+    Find energy shift matrix of SI using cross correlation. Works best by defining an energy range around a peak that you expect to be consistent across the SI.
+    Inputs:
+    SI- SI
+	energy_axis - corresponding energy axis
+	erange - energy range to find correlate shifts, input as [minE,maxE], default to the entire spectra
+    deriv - optional argument. deriv=1 to correlate spectrum using 1st derivative of SI. Possible failure in noisey datasets. Default = 0.
+
+	Outputs:
+	shifts_x - shift matrix
+
+SIregistration(SI,energy_axis,shifts,stype='int'):
+    Shifts SI spectrum according to shift matrix generated by SIshift.
+    Inputs:
+    SI- SI
+	energy_axis - corresponding energy axis
+	shifts - corresponding shift matrix
+    stype - shift type, either shift by integer channel or subpixel shift
+
+	Outputs:
+	SI_c - SI with cropped energy range
+    E_c - corresponding energy axis with cropped energy range
+
+denoise(data, threshold, window = 1):
+    Removes outlier pixels.
+    Inputs:
+    data - 1D spectra
+    threshold - threshold to cut off above the mean value over channel window
+    window - channel window size
+
+    Outputs:
+    spectrum - denoised spectrum
+
+smoothT(data, window):
+    Similar to denoise but convolves data with a triangle function. Note, typically better to use denoise. smoothT can shift spectra.
+    Inputs:
+    data - 1D spectra
+    window - channel window size
+
+    Outputs:
+    smoothed - smoothed spectrum
+
+================
+Data Processing:
+================
+bgsub_SI(raw_data, energy_axis, edge, **kwargs):
+    Full background subtraction function-
+    Optional LBA, log fitting, LCPL, and exponential fitting.
+    For more information on non-linear fitting function, see information at https://docs.scipy.org/doc/scipy/reference/generated/scipy.optimize.curve_fit.html
+
+    Inputs:
+    raw_data - SI
+    energy_axis - corresponding energy axis
+    edge - edge parameters defined by KEM convention
+
+    **kawrgs:
+    fit - choose the type of background fit, default == 'pl' == Power law. Can also use 'exp'== Exponential, 'lin' == Linear.
+    gfwhm - If using LBA, gfwhm corresponds to width of gaussian filter, default = None, meaning no LBA.
+    mean - ** improved LBA normalization for low count data. If using LBA, gfwhm corresponds to width of gaussian filter, default = None, meaning no LBA.
+    log - Boolean, if true, log transform data and fit using QR factorization, default == False.
+    lc - Boolean, if true, include LCPL or LCEX background subtracted SI, default == False.
+    nstd - standard deviation spread of r values from power law fitting. 1= 20/80 percentile, 2= 5/95 percentile. Default == 2.
+    ftol - default to 0.0005, Relative error desired in the sum of squares.
+    gtol - default to 0.00005, Orthogonality desired between the function vector and the columns of the Jacobian.
+    xtol - default to None, Relative error desired in the approximate solution.
+    maxfev - default to 50000, Only change if you are consistenly catching runtime errors and loosening gtol/ftols are not making a good enough fit.
+    method - default is 'trf', see https://docs.scipy.org/doc/scipy/reference/generated/scipy.optimize.least_squares.html#scipy.optimize.least_squares for description of methods
+    Note: may need stricter tolerances on ftol/gtol for noisier data. Anecdotally, a stricter gtol (as low as 1e-8) has a larger effect on the quality of the bgsub.
+    mask - Boolean mask defines non-vacuum region in SI, used to improve LCPL
+    threshold - mininum average counts in fit window to be included in LCPL calculation.
+
+    Outputs:
+    if lcpl == False:
+        bg_pl_SI - background subtracted SI
+    if lcpl == True:
+        bg_pl_SI, bg_lcpl_SI - background subtracted SI, LCPL background subtracted SI
+
+bgsub_1D(raw_data, energy_axis, edge, **kwargs):
+    Full background subtraction function for the 1D case-
+    Optional LBA, log fitting, LCPL, and exponential fitting.
+    For more information on non-linear fitting function, see information at https://docs.scipy.org/doc/scipy/reference/generated/scipy.optimize.curve_fit.html
+
+    Inputs:
+    raw_data - 1D spectrum
+    energy_axis - corresponding energy axis
+    edge - edge parameters defined by KEM convention
+
+    **kawrgs:
+    fit - choose the type of background fit, default == 'pl' == Power law. Can also use 'exp'== Exponential, 'lin' == Linear, 'lcpl' == LCPL.
+    log - Boolean, if true, log transform data and fit using QR factorization, default == False.
+    nstd - Standard deviation spread of r error from non-linear power law fitting. Default == 100.
+    ftol - default to 0.0005, Relative error desired in the sum of squares.
+    gtol - default to 0.00005, Orthogonality desired between the function vector and the columns of the Jacobian.
+    xtol - default to None, Relative error desired in the approximate solution.
+    maxfev - default to 50000, Only change if you are consistenly catching runtime errors and loosening gtol/ftols are not making a good enough fit.
+    method - default is 'trf', see https://docs.scipy.org/doc/scipy/reference/generated/scipy.optimize.least_squares.html#scipy.optimize.least_squares for description of methods
+    Note: may need stricter tolerances on ftol/gtol for noisier data. Anecdotally, a stricter gtol (as low as 1e-8) has a larger effect on the quality of the bgsub.
+
+    Outputs:
+    bg_1D - background subtracted spectrum
+
+edgemap(raw_data, energy_axis, edge):
+    Produce intensity map of a background subtracted dataset.
+	Inputs:
+	raw_data - SI
+	energy_axis - corresponding energy axis
+	edge - edge parameters corresponding to desired element defined by KEM convention
+
+	Outputs:
+	dummymap - edgemap
+
+fit_check(raw_data,energy_axis):
+    This function is used to check the fit window before running a background subtraction.
+	Inputs:
+	raw_data - SI
+	energy_axis - corresponding energy axis
+
+
+edge_check(bsub,energy_axis,edge):
+    This function is used to check the quality of a background subtraction.
+	Inputs:
+	bsub - either background subtracted data cube or SI
+	energy_axis - corresponding energy axis
+	edge - edge parameters corresponding to desired element defined by KEM convention
+
+
+saveTiff_clip(array, minclip, maxclip, title, path, save=True):
+    *** This function is only meant to clip outlier pixels. Use very low clipping values if you need this function ***
+    This function will clip out min and max percentile grey values of array and plot result. Defaults to saving as tiff.
+
+    Inputs:
+    array - 2D image
+    minclip - minimum percentile cutoff
+    maxclip - maximum percentile cutoff
+    title - title of image
+    path - save path
+    save - defaults True
+
+============================
+Plotting Shortcut Functions:
+============================
+easyplot(title = '', figsize = (8,5)): 1D spectra plot shortcut. Sets the axes.
+
+easyrgb(imstack,cstack=None):
+    This function supports creation of rgb and cymk images.
+
+    Input:
+    imstack - list of 2D images to be made into a rgb stack
+    cstack - list of corresponding colors, default is 'r','g','b','c','m','y'.
+
+    Output:
+    rgb - color image generated by function
+
+"""
+
+import numpy as np
+import numpy.linalg as LA
+import matplotlib.pyplot as plt
+from matplotlib import rc
+import hyperspy.api as hs
+
+import tifffile
+
+# import skimage
+from scipy.optimize import curve_fit
+from scipy.ndimage import gaussian_filter
+from scipy.stats import norm
+import scipy.signal as f
+from scipy.signal import savgol_filter
+
+from tqdm.notebook import tqdm
+
+import ipywidgets as widgets
+from IPython.display import display
+import warnings
+
+
+plt.rcParams['font.sans-serif'] = "Arial"
+plt.rcParams['font.family'] = "sans-serif"
+
+###############################################################################
+
+def linear(energy, a, b):
+    return a*energy + b
+
+def powerlaw(energy, c, r):
+    return c*energy**(-r)
+
+def lcpowerlaw(energy, c1, r1, c2, r2):
+    return c1*energy**(-r1) + c2*energy**(-r2)
+
+def exponential(energy,a,b):
+    return a*np.exp(-b*energy)
+
+def qrnorm(A,b):
+    """
+    Solve systems of linear equations Ax = b for x
+    """
+    q, r = LA.qr(A)
+    p = np.dot(q.T,b)
+    return np.dot(LA.inv(r),p)
+
+###############################################################################
+
+def find_nearest(array, value):
+    """
+    Inputs:
+    array - array...
+    value - value to search for in array
+
+    Outputs:
+    array[idx] - nearest value in array
+    """
+    array = np.asarray(array)
+    idx = (np.abs(array - value)).argmin()
+    return array[idx]
+
+def eVtoCh(energy, array):
+	return np.int(np.squeeze(np.argwhere(array == find_nearest(array,energy))))
+
+def ChtoeV(channel, array):
+	return array[channel]
+
+###############################################################################
+
+def specload(file, norm = False, type = "1",show=True):
+    """
+    Uses hyperspy.api to load SI - information at http://hyperspy.org/hyperspy-doc/current/api/hyperspy.api.html
+
+    Input:
+    file - file location
+
+    Outputs:
+    energy - energy axis of spectra
+    rawSI.data - 3D SI array
+    pxscale - pixel size (check params for scale)
+    disp - energy resolution
+    params - axes_manager of file
+    type - which version of DM you are using; type 1 works on data from the Titan, type 2 from the Kraken
+
+    """
+
+    if type == "2": ## for files off the Kraken
+        rawSI = hs.load(file)[2]
+    elif type == "1":
+        try:
+            rawSI=hs.load(file)[0]
+        except:
+            rawSI=hs.load(file)
+    else:
+        print("Hmmm... check the file structure on this one")
+
+    params=rawSI.axes_manager
+    if show==True:
+        print(params)
+    ch1=np.round(rawSI.axes_manager[2j].get_axis_dictionary()['offset'],4)
+    disp=np.round(rawSI.axes_manager[2j].get_axis_dictionary()['scale'],4)
+    rawSI.z=int(rawSI.axes_manager[2j].get_axis_dictionary()['size'])
+    energy= np.round(np.arange(ch1,ch1+rawSI.z*disp,disp),4)
+    pxscale = rawSI.axes_manager[0].get_axis_dictionary()['scale']
+    if len(energy)!= rawSI.z:
+        energy = energy[:-1]
+    if norm == True:
+    	rawSI.data = rawSI.data/sum(rawSI.data)
+    return(energy, rawSI.data, pxscale, disp, params)
+
+
+
+def specload_dual(file, norm = False, type = "1"):
+    """
+    Uses hyperspy.api to load SI - information at http://hyperspy.org/hyperspy-doc/current/api/hyperspy.api.html
+
+    Input:
+    file - file location
+
+    Outputs:
+    energy - energy axis of spectra
+    rawSI.data - 3D SI array
+    pxscale - pixel size (check params for scale)
+    disp - energy resolution
+    params - axes_manager of file
+    type - which version of DM you are using; type 1 works on data from the Titan, type 2 from the Kraken
+    """
+
+    energies = []
+    spectra = []
+    paramses = []
+
+    if type == '1':
+        ## normal load on the low loss region
+        rawSI=hs.load(file)[0]
+        params=rawSI.axes_manager
+        print(params)
+        ch1=np.round(rawSI.axes_manager[2j].get_axis_dictionary()['offset'],4)
+        disp=np.round(rawSI.axes_manager[2j].get_axis_dictionary()['scale'],4)
+        rawSI.z=int(rawSI.axes_manager[2j].get_axis_dictionary()['size'])
+        energy= np.round(np.arange(ch1,ch1+rawSI.z*disp,disp),4)
+        pxscale = rawSI.axes_manager[0].get_axis_dictionary()['scale']
+        if len(energy)!= rawSI.z:
+            energy = energy[:-1]
+        if norm == True:
+            rawSI.data = rawSI.data/sum(rawSI.data)
+        energies.append(energy)
+        spectra.append(rawSI.data)
+        paramses.append(params)
+
+        ## same for the high loss region
+        rawSI=hs.load(file)[1]
+        params=rawSI.axes_manager
+        print(params)
+        ch1=np.round(rawSI.axes_manager[2j].get_axis_dictionary()['offset'],4)
+        disp=np.round(rawSI.axes_manager[2j].get_axis_dictionary()['scale'],4)
+        rawSI.z=int(rawSI.axes_manager[2j].get_axis_dictionary()['size'])
+        energy= np.round(np.arange(ch1,ch1+rawSI.z*disp,disp),4)
+        pxscale = rawSI.axes_manager[0].get_axis_dictionary()['scale']
+        if len(energy)!= rawSI.z:
+            energy = energy[:-1]
+        if norm == True:
+            rawSI.data = rawSI.data/sum(rawSI.data)
+        energies.append(energy)
+        spectra.append(rawSI.data)
+        paramses.append(params)
+
+    elif type == '2':
+            ## normal load on the low loss region
+        rawSI=hs.load(file)[2]
+        params=rawSI.axes_manager
+        print(params)
+        ch1=np.round(rawSI.axes_manager[2j].get_axis_dictionary()['offset'],4)
+        disp=np.round(rawSI.axes_manager[2j].get_axis_dictionary()['scale'],4)
+        rawSI.z=int(rawSI.axes_manager[2j].get_axis_dictionary()['size'])
+        energy= np.round(np.arange(ch1,ch1+rawSI.z*disp,disp),4)
+        pxscale = rawSI.axes_manager[0].get_axis_dictionary()['scale']
+        if len(energy)!= rawSI.z:
+            energy = energy[:-1]
+        if norm == True:
+            rawSI.data = rawSI.data/sum(rawSI.data)
+        energies.append(energy)
+        spectra.append(rawSI.data)
+        paramses.append(params)
+
+        ## same for the high loss region
+        rawSI=hs.load(file)[3]
+        params=rawSI.axes_manager
+        print(params)
+        ch1=np.round(rawSI.axes_manager[2j].get_axis_dictionary()['offset'],4)
+        disp=np.round(rawSI.axes_manager[2j].get_axis_dictionary()['scale'],4)
+        rawSI.z=int(rawSI.axes_manager[2j].get_axis_dictionary()['size'])
+        energy= np.round(np.arange(ch1,ch1+rawSI.z*disp,disp),4)
+        pxscale = rawSI.axes_manager[0].get_axis_dictionary()['scale']
+        if len(energy)!= rawSI.z:
+            energy = energy[:-1]
+        if norm == True:
+            rawSI.data = rawSI.data/sum(rawSI.data)
+        energies.append(energy)
+        spectra.append(rawSI.data)
+        paramses.append(params)
+
+    return(energies, spectra, pxscale, disp, paramses)
+
+def bin_ndarray(ndarray, bin_factors, operation='sum'):
+    """
+    Bins an ndarray in all axes based on the bin_size array, by summing or
+        averaging. Bin_size is expected to be an array with length 3, one element for the x, y and z binning.
+
+    Number of output dimensions must match number of input dimensions and
+        new axes must divide old ones.
+
+    Example
+    -------
+    >>> m = np.arange(0,100,1).reshape((10,10))
+    >>> n = bin_ndarray(m, new_shape=(5,5), operation='sum')
+    >>> print(n)
+
+    [[ 22  30  38  46  54]
+     [102 110 118 126 134]
+     [182 190 198 206 214]
+     [262 270 278 286 294]
+     [342 350 358 366 374]]
+
+    """
+    try:
+        dimx,dimy,dimE = np.shape(ndarray)
+        new_shape=[int(dimx/bin_factors[0]),int(dimy/bin_factors[1]),int(dimE/bin_factors[2])]
+    except:
+        dimL,dimE=np.shape(ndarray)
+        new_shape=[int(dimL/bin_factors[0]),int(dimE/bin_factors[1])]
+    operation = operation.lower()
+    if not operation in ['sum', 'mean']:
+        raise ValueError("Operation not supported.")
+    if ndarray.ndim != len(new_shape):
+        raise ValueError("Shape mismatch: {} -> {}".format(ndarray.shape,
+                                                           new_shape))
+    compression_pairs = [(d, c//d) for d,c in zip(new_shape,
+                                                  ndarray.shape)]
+
+    flattened = [l for p in compression_pairs for l in p]
+    #bin_ndarray=np.copy(ndarray)
+    ndarray = np.reshape(ndarray,flattened)
+    for i in range(len(new_shape)):
+        op = getattr(ndarray, operation)
+        ndarray = op(-1*(i+1))
+    return ndarray
+
+def saveTiff(array, filename, bits=16):
+    """
+    Save array as tiff in Uint 16 bit.
+    """
+    t = 'uint{}'.format(bits)
+
+    scale = (array-array.min())/(array.max()-array.min())
+
+    imarr = ((2**bits-1)*scale).astype(t)
+
+    if len(np.shape(imarr))>2:
+        imarr = np.swapaxes(imarr,0,2)
+    tifffile.imsave(filename+'.tif', imarr)
+
+
+def readTiffStack(filename):
+    """
+    Read in Tiff file.
+    """
+    image = tifffile.imread(filename)
+    data = np.array(image)
+    if len(np.shape(data))==3:
+        data = np.swapaxes(data, 0, 2)
+    return data
+
+def load_bsub(file):
+    """
+    Load the background subtracted data. This function assumes that the npz file contains a background subtracted spectrum named 'bsub', an energy axis named 'energy' and edge parameters.
+    The edge input notation is edge=[fit_start_ev,fit_end_ev,integration_start,integration_end,edge_name].
+    """
+    data=np.load(file)
+    bsub=data['bsub'].astype(float)
+    energy=data['energy'].astype(float)
+    edge=data['edge']
+    edge_params=np.delete(edge,-1)
+    edge_params=edge_params.astype(float)
+    real_edge=[edge_params[0],edge_params[1],edge_params[2],edge_params[3],edge[-1]]
+    return(bsub, energy, real_edge)
+
+def dark_sub(SI,dark,specaq,darkaq):
+	"""
+	Inputs:
+	SI - SI
+    dark - Dark SI array
+	specaq - spectrum acqusition time
+	darkaq - dark acquisition time
+
+	Outputs:
+	corrected_spectrum - dark substracted sum spectrum
+	corrected_raw - dark subtracted SI
+	dark_spectrum - dark sum spectrum
+	"""
+	try: ## for maps
+		spectrum= sum(sum(SI[:,:]))
+		spectrum_x, spectrum_y, spectrum_z = np.shape(SI)
+	except: ## for single spectra
+		spectrum= SI
+		spectrum_z = len(SI)
+# 	if darkdm3 == "":
+# 		dark_spectrum= np.zeros(spectrum_z)
+# 	else:
+# 	dark = hs.load(darkdm3)
+	try: ## for maps
+		dark_x, dark_y, dark_z = np.shape(dark)
+		dark_spectrum= sum(sum(dark[:,:])) / (dark_x *dark_y)
+	except: ## for single spectra
+		dark_z = len(dark)
+		dark_spectrum= dark * specaq/darkaq
+	corrected_spectrum=np.subtract(spectrum,dark_spectrum*spectrum_x*spectrum_y)
+	corrected_raw=np.subtract(SI,np.tile(dark_spectrum,(spectrum_x,spectrum_y,1)))
+	return(corrected_spectrum, corrected_raw, dark_spectrum)
+
+def dark_subtraction_correction(raw_data,energy_axis,edge,**kwargs):
+    """
+    This function can be used to denoise your spectrum if you have sufficient vacuum in your SI.
+    Calculates a new dark spectrum to subtract from each pixel.
+
+    Inputs:
+    raw_data - SI
+    energy_axis - corresponding energy axis
+    edge - edge parameter containing fit window in eV. This will work better if you define this energy range as the entire energy range of the SI.
+    mask - boolean array. True where there is vacuum
+    threshold - maximum average counts in fit window to be considered vacuum pixel
+
+    Outputs:
+    data - dark subtracted SI
+    darkspec - average dark spectrum subtracted from each pixel
+    """
+    xdim,ydim,zdim = np.shape(raw_data)
+    if 'mask' in kwargs.keys():
+        mask = kwargs['mask']
+    elif 'threshold' in kwargs.keys():
+        thresh = kwargs['threshold']
+        edge_ch = [eVtoCh(edge[0],energy_axis),eVtoCh(edge[1],energy_axis)]
+        mean_back = np.mean(raw_data[:,:,edge_ch[0]:edge_ch[1]],axis=2)
+        mask = mean_back<thresh
+    else:
+        print('Need to input either a mask or threshold value')
+        darkspec = np.zeros(zdim)
+    darkspec=np.mean(raw_data[mask,:],axis=0)
+    data = np.copy(raw_data)
+    for i in range(xdim):
+        for j in range(ydim):
+            data[i,j,:] -= darkspec
+    return data,darkspec
+
+#Variables for shift functions:
+#LL_SI is the low-loss SI, CL_SI is core-loss SI, S is the shift matrix, and shift_CL and shift_LL are the shifted SIs
+
+#Make a shift matrix using the low loss spectra (for dual-EELS only) based on the zero-loss peak
+def zlp_shifts(LL_SI,energy):
+    """
+    Inputs:
+    LL_SI- low loss SI
+    energy- corresponding energy axis
+
+    Outputs:
+    S- shift matrix
+    shift_LL- shifted low loss SI
+    """
+    dimx,dimy,dimE=np.shape(LL_SI)
+    S=np.zeros((dimx,dimy))
+    shift_LL=np.zeros_like(LL_SI)
+    zero_ch=eVtoCh(0,energy)
+    for i in range(dimx):
+        for j in range(dimy):
+            I=np.argmax(LL_SI[i,j,:])
+            S[i,j]=int(zero_ch-I)
+            shiftspec=np.roll(LL_SI[i,j,:],int(zero_ch-I))
+            shift_LL[i,j,:]=shiftspec
+    easyplot("Zero loss peak before and after alignment")
+    shift_sum=np.sum(np.sum(shift_LL,axis=0),axis=0)
+    pre_sum=np.sum(np.sum(LL_SI,axis=0),axis=0)
+    plt.plot(energy,pre_sum,label='Unshifted')
+    plt.plot(energy,shift_sum,label='Shifted')
+    plt.xlim(-20,20)
+    plt.legend()
+    return(S,shift_LL)
+
+#Apply a shift matrix to the core loss spectrum, with only integer shifts
+##To do: Switch between pixel/subpixel
+#Set rolled array elements equal to negative 1.
+def shift_coreloss(CL_SI,S):
+    """
+    Inputs:
+    CL_SI- core loss SI
+    S- shift matrix
+
+    Outputs:
+    shift_CL- shifted core loss SI
+    """
+    dimx,dimy,dimE=np.shape(CL_SI)
+    shift_CL=np.zeros_like(CL_SI)
+    for i in range(dimx):
+        for j in range(dimy):
+            shiftspec=np.roll(CL_SI[i,j,:],int(S[i,j]))
+            shift_CL[i,j,:]=shiftspec
+
+    return(shift_CL)
+
+# find energy shift in SI
+def SIshift(SI,energy_axis,**kwargs):
+    """
+    Inputs:
+    SI- SI
+	energy_axis - corresponding energy axis
+	erange - energy range to find correlate shifts, input as [minE,maxE], default to the entire spectra
+    deriv - optional argument. deriv=1 to correlate spectrum using 1st derivative of SI. Possible failure in noisey datasets. Default = 0.
+
+	Outputs:
+	shifts_x - shift matrix
+	"""
+    if len(np.shape(SI)) == 2:
+        SI = np.reshape(SI,(np.shape(SI)[0],1,np.shape(SI)[1]))
+    if 'deriv' in kwargs.keys():
+        deriv = int(kwargs['deriv'])
+        n = 3
+        disp = energy_axis[1] - energy_axis[0]
+        N = 2*int(4/disp) +1
+        fSI = savgol_filter(SI,N,n,axis = 2)
+        for i in range(deriv):
+            SI_slope = (np.roll(fSI,-1,axis = 2) - fSI)
+            fSI = SI_slope
+        z = len(energy_axis)
+        SI = fSI[:,:,:z-deriv]
+        energy_axis = energy_axis[:z-deriv]
+
+    if 'erange' in kwargs.keys():
+        erange = kwargs['erange']
+        erange_ch = [eVtoCh(erange[0], energy_axis),eVtoCh(erange[1], energy_axis)]
+    else:
+        erange_ch = [0,len(energy_axis)]
+
+    subspec_stack = np.reshape(SI,(np.shape(SI)[0]*np.shape(SI)[1],np.shape(SI)[2]))[:,erange_ch[0]:erange_ch[1]+1]
+    subspec_stack = np.swapaxes(subspec_stack,0,1)
+    nx,nz = np.shape(subspec_stack)
+    mask_realspace = (np.sin(np.pi*np.arange(nx)/nx))**2
+    fftstack = np.zeros_like(subspec_stack, dtype='complex')
+    for i in range(nz):
+        fftstack[:,i] = np.fft.fft((subspec_stack[:,i]-np.mean(subspec_stack[:,i]))*mask_realspace)
+
+    X_ij = np.zeros((nz,nz))
+
+
+    for i in range (0, nz-1):
+        for j in range(i+1, nz):
+            cc = np.abs(np.fft.ifft(fftstack[:,j] * np.conj(fftstack[:,i])))
+            xshift = np.argmax(cc)
+            if xshift<nx/2:
+                X_ij[i,j] = xshift
+            else:
+                X_ij[i,j] = xshift-nx
+    for i in range (0, nz-1):
+        for j in range(i+1, nz):
+            X_ij[j,i] = -X_ij[i,j]
+
+    shifts_x=np.sum(X_ij,axis=1)/nz
+    shifts_x = np.reshape(shifts_x,(np.shape(SI)[0],np.shape(SI)[1]))
+    return shifts_x
+
+def SIregistration(SI,energy_axis,shifts,stype='int'):
+    """
+    Inputs:
+    SI- SI
+	energy_axis - corresponding energy axis
+	shifts - corresponding shift matrix
+    stype - shift type, either shift by integer channel or subpixel shift
+
+	Outputs:
+	SI_c - SI with cropped energy range
+    E_c - corresponding energy axis with cropped energy range
+	"""
+    if len(np.shape(SI)) == 2:
+        SI = np.reshape(SI,(np.shape(SI)[0],1,np.shape(SI)[1]))
+    nE = np.shape(SI)[2]
+    maxS = int(np.round(np.max(shifts)))
+    shifted_SI = np.zeros_like(SI)
+    if stype == 'int':
+        for i in range(np.shape(shifts)[0]):
+            for j in range(np.shape(shifts)[1]):
+                shifted_SI[i,j,:] = np.roll(SI[i,j,:], int(np.round(shifts[i,j])))
+    if stype == 'subpixel':
+        for i in range(np.shape(shifts)[0]):
+            for j in range(np.shape(shifts)[1]):
+                spec = SI[i,j,:]
+                w = -np.exp(-(2j*np.pi)*(shifts[i,j]*np.arange(nE)/nE))
+                shifted_SI[i,j,:] = np.abs(np.fft.ifft(np.fft.ifftshift(np.fft.fftshift(np.fft.fft(spec))*w)))
+    E_c = energy_axis[maxS:nE-maxS]
+    SI_c = shifted_SI[:,:,maxS:nE-maxS]
+    return SI_c,E_c
+
+def denoise(data, threshold, window = 1):
+    """
+    Removes outlier pixels.
+    Inputs:
+    data - 1D spectra
+    threshold - threshold to cut off above the mean value over channel window
+    window - channel window size
+
+    Outputs:
+    spectrum - denoised spectrum
+    """
+    spectrum = np.copy(data)
+    for pixel in np.arange(window,len(spectrum)-window,1):
+        if np.abs(spectrum[pixel] - np.mean(spectrum[pixel-window:pixel+window])) > threshold:
+            spectrum[pixel] = np.median(spectrum[pixel-window:pixel+window])
+        else:
+            pass
+    return spectrum
+
+def smoothT(data, window):
+    """
+    Similar to denoise but convolves data with a triangle function. Note, typically better to use denoise. smoothT can shift spectra.
+
+    Inputs:
+    data - 1D spectra
+    window - channel window size
+
+    Outputs:
+    smoothed - smoothed spectrum
+    """
+    triangle=np.concatenate((np.arange(window + 1), np.arange(window)[::-1])) # up then down
+    smoothed=[]
+
+    for i in range(window, len(data) - window * 2):
+        point=data[i:i + len(triangle)] * triangle
+        smoothed.append(np.sum(point)/np.sum(triangle))
+    # Handle boundaries
+    smoothed=[smoothed[0]]*int(window + window/2) + smoothed
+    while len(smoothed) < len(data):
+        smoothed.append(smoothed[-1])
+    return np.array(smoothed)
+
+###############################################################################
+
+def bgsub_SI(raw_data, energy_axis, edge, **kwargs):
+    """
+    Full background subtraction function-
+    Optional LBA, log fitting, LCPL, and exponential fitting.
+    For more information on non-linear fitting function, see information at https://docs.scipy.org/doc/scipy/reference/generated/scipy.optimize.curve_fit.html
+
+    Inputs:
+    raw_data - SI
+    energy_axis - corresponding energy axis
+    edge - edge parameters defined by KEM convention
+
+    **kawrgs:
+    fit - choose the type of background fit, default == 'pl' == Power law. Can also use 'exp'== Exponential, 'lin' == Linear.
+    gfwhm - If using LBA, gfwhm corresponds to width of gaussian filter, default = None, meaning no LBA.
+    log - Boolean, if true, log transform data and fit using QR factorization, default == False.
+    lc - Boolean, if true, include LCPL or LCEX background subtracted SI, default == False.
+    nstd - standard deviation spread of r values from power law fitting. 1= 20/80 percentile, 2= 5/95 percentile. Default == 2.
+    ftol - default to 0.0005, Relative error desired in the sum of squares.
+    gtol - default to 0.00005, Orthogonality desired between the function vector and the columns of the Jacobian.
+    xtol - default to None, Relative error desired in the approximate solution.
+    maxfev - default to 50000, Only change if you are consistenly catching runtime errors and loosening gtol/ftols are not making a good enough fit.
+    method - default is 'trf', see https://docs.scipy.org/doc/scipy/reference/generated/scipy.optimize.least_squares.html#scipy.optimize.least_squares for description of methods
+    Note: may need stricter tolerances on ftol/gtol for noisier data. Anecdotally, a stricter gtol (as low as 1e-8) has a larger effect on the quality of the bgsub.
+    mask - Boolean mask defines non-vacuum region in SI, used to improve LCPL
+    threshold - mininum average counts in fit window to be included in LCPL calculation.
+
+    Outputs:
+    if lcpl == False:
+        bg_pl_SI - background subtracted SI
+    if lcpl == True:
+        bg_pl_SI, bg_lcpl_SI - background subtracted SI, LCPL background subtracted SI
+    """
+    fit_start_ch = eVtoCh(edge[0], energy_axis)
+    fit_end_ch = eVtoCh(edge[1], energy_axis)
+    raw_data = raw_data.astype('float32')
+    if len(np.shape(raw_data)) == 2:
+        tempx,tempz = np.shape(raw_data)
+        raw_data = np.reshape(raw_data,(tempx,1,tempz))
+    if len(np.shape(raw_data)) == 1:
+        tempz = len(raw_data)
+        raw_data = np.reshape(raw_data,(1,1,tempz))
+    xdim, ydim, zdim = np.shape(raw_data)
+    ewin = energy_axis[fit_start_ch:fit_end_ch]
+    esub = energy_axis[fit_start_ch:]
+    bg_pl_SI = np.zeros_like(raw_data)
+
+## Special case: if there is vacuum in the SI and it is causing trouble with your LCPL fitting:
+    if 'mask' in kwargs.keys():
+        threshmask = kwargs['mask']
+    elif 'threshold' in kwargs.keys():
+        thresh = kwargs['threshold']
+        mean_back = np.mean(raw_data[:,:,fit_start_ch:fit_end_ch],axis=2)
+        threshmask = mean_back > thresh
+    else:
+        mask = np.ones((xdim,ydim))
+        threshmask = mask == 1
+
+## If given a FWHM, Perform channel-wise gaussian filtering and re-normalize using qr factorization
+#     if 'gfwhm' in kwargs.keys():
+#         gfwhm = kwargs['gfwhm']
+#         lba_raw = np.copy(raw_data)
+#         lba_raw_normalized = np.copy(lba_raw)
+#         for energychannel in np.arange(fit_start_ch,fit_end_ch):
+#             lba_raw[:,:,energychannel] = gaussian_filter(raw_data[:,:,energychannel],sigma=gfwhm/2.35)
+#         a = np.zeros((len(lba_raw[0,0,fit_start_ch:fit_end_ch]),1))
+#         b = np.zeros((len(raw_data[0,0,fit_start_ch:fit_end_ch]),1))
+#         pbar = tqdm(total = (xdim)*(ydim),desc = "Normalizing")
+#         for i in range(xdim):
+#             for j in range(ydim):
+#                 a[:,0] = lba_raw[i,j,fit_start_ch:fit_end_ch]
+#                 b[:,0] = raw_data[i,j,fit_start_ch:fit_end_ch]
+#                 lba_raw_normalized[i,j,fit_start_ch:fit_end_ch] = lba_raw[i,j,fit_start_ch:fit_end_ch]*qrnorm(a,b)
+#                 pbar.update(1)
+    if 'gfwhm' in kwargs.keys():
+        gfwhm = kwargs['gfwhm']
+        lba_raw = np.copy(raw_data)
+        lba_raw_normalized = np.copy(lba_raw)
+        for energychannel in np.arange(fit_start_ch,fit_end_ch):
+            lba_raw[:,:,energychannel] = gaussian_filter(raw_data[:,:,energychannel],sigma=gfwhm/2.35)
+        pbar = tqdm(total = (xdim)*(ydim),desc = "Normalizing")
+        for i in range(xdim):
+            for j in range(ydim):
+                lba_mean = np.mean(lba_raw[i,j,fit_start_ch:fit_end_ch])
+                data_mean = np.mean(raw_data[i,j,fit_start_ch:fit_end_ch])
+                lba_raw_normalized[i,j,fit_start_ch:fit_end_ch] = lba_raw[i,j,fit_start_ch:fit_end_ch]*data_mean/lba_mean
+                pbar.update(1)
+    else:
+        lba_raw_normalized = np.copy(raw_data)
+
+## Either fast fitting -> log fitting, Or slow fitting -> non-linear fitting
+    if 'log' in kwargs.keys():
+        log = kwargs['log']
+    else:
+        log = False
+
+## Fitting parameters for non-linear curve fitting if non-log based fitting
+    if 'ftol' in kwargs.keys():
+        ftol = kwargs['ftol']
+    else:
+        ftol = 0.0005
+    if 'gtol' in kwargs.keys():
+        gtol = kwargs['gtol']
+    else:
+        gtol = 0.00005
+    if 'xtol' in kwargs.keys():
+        xtol = kwargs['xtol']
+    else:
+        xtol = None
+    if 'maxfev' in kwargs.keys():
+        maxfev = kwargs['maxfev']
+    else:
+        maxfev = 50000
+    if 'method' in kwargs.keys():
+        method = kwargs['method']
+    else:
+        method = 'trf'
+
+## Determine if fitting is power law or exponenetial
+    if 'fit' in kwargs.keys():
+        fit = kwargs['fit']
+        if fit == 'exp':
+            fitfunc = exponential
+            bounds = ([0, 0], [np.inf, np.inf])
+        elif fit == 'pl':
+            fitfunc = powerlaw
+        elif fit == 'lin':
+            fitfunc = linear
+        else:
+            print('Did not except fitting function, please use either \'pl\' for powerlaw, \'exp\' for exponential or \'lin\' for linear.')
+    else:
+        fitfunc = powerlaw
+
+## If fast fitting linear background, find fit using qr factorization
+    if fitfunc==linear:
+        Blin = np.reshape(lba_raw_normalized[:,:,fit_start_ch:fit_end_ch],((xdim*ydim),len(ewin)))
+        Alin = np.zeros((len(ewin),2))
+        Alin[:,0] = np.ones(len(ewin))
+        Alin[:,1] = ewin
+        Xlin = qrnorm(Alin,Blin.T)
+        Elin = np.zeros((len(esub),2))
+        Elin[:,0] = np.ones(len(esub))
+        Elin[:,1] = esub
+        bgndLINline = np.dot(Xlin.T,Elin.T)
+        bgndLIN = np.reshape(bgndLINline,(xdim,ydim,len(esub)))
+        bg_pl_SI[:,:,fit_start_ch:] = raw_data[:,:,fit_start_ch:] - bgndLIN
+
+## If fast log fitting and powerlaw, find fit using qr factorization
+    if log & (fitfunc==powerlaw):
+        Blog = np.reshape(lba_raw_normalized[:,:,fit_start_ch:fit_end_ch],((xdim*ydim),len(ewin)))
+        Alog = np.zeros((len(ewin),2))
+        Alog[:,0] = np.ones(len(ewin))
+        Alog[:,1] = np.log(ewin)
+        Xlog = qrnorm(Alog,np.log(abs(Blog.T)))
+        Elog = np.zeros((len(esub),2))
+        Elog[:,0] = np.ones(len(esub))
+        Elog[:,1] = np.log(esub)
+        bgndPLline = np.exp(np.dot(Xlog.T,Elog.T))
+        bgndPL = np.reshape(bgndPLline,(xdim,ydim,len(esub)))
+        bg_pl_SI[:,:,fit_start_ch:] = raw_data[:,:,fit_start_ch:] - bgndPL
+        maskline = np.reshape(threshmask,(xdim*ydim))
+        rline_long = -1*Xlog[1,:]
+        rline = rline_long[maskline]
+
+## If fast log fitting and exponential, find fit using qr factorization
+    elif log & (fitfunc==exponential):
+        Bexp = np.reshape(lba_raw_normalized[:,:,fit_start_ch:fit_end_ch],((xdim*ydim),len(ewin)))
+        Aexp = np.zeros((len(ewin),2))
+        Aexp[:,0] = np.ones(len(ewin))
+        Aexp[:,1] = ewin
+        Xexp = qrnorm(Aexp,np.log(abs(Bexp.T)))
+        Eexp = np.zeros((len(esub),2))
+        Eexp[:,0] = np.ones(len(esub))
+        Eexp[:,1] = esub
+        bgndEXPline = np.exp(np.dot(Xexp.T,Eexp.T))
+        bgndEXP = np.reshape(bgndEXPline,(xdim,ydim,len(esub)))
+        bg_pl_SI[:,:,fit_start_ch:] = raw_data[:,:,fit_start_ch:] - bgndEXP
+        maskline = np.reshape(threshmask,(xdim*ydim))
+        bline_long = -1*Xexp[1,:]
+        bline = bline_long[maskline]
+
+## Power law non-linear curve fitting using scipy.optimize.curve_fit
+    elif ~log & (fitfunc==powerlaw):
+        rline = []
+        dummyspec = sum(sum(raw_data))/(xdim*ydim)
+        popt_init,pcov_init=curve_fit(powerlaw, ewin, dummyspec[fit_start_ch:fit_end_ch],maxfev=maxfev,method=method,verbose = 0)
+        pbar1 = tqdm(total = (xdim)*(ydim),desc = "Background subtracting")
+        for i in range(xdim):
+            for j in range(ydim):
+                popt_pl,pcov_pl=curve_fit(powerlaw, ewin, lba_raw_normalized[i,j,fit_start_ch:fit_end_ch],maxfev=maxfev,method=method,verbose = 0
+                                          ,p0=popt_init, ftol=ftol, gtol=gtol, xtol=xtol)
+                c,r = popt_pl
+                if threshmask[i,j]:
+                    rline = np.append(rline,r)
+                bg_pl_SI[i,j,fit_start_ch:] = raw_data[i,j,fit_start_ch:] - powerlaw(energy_axis[fit_start_ch:],c,r)
+                pbar1.update(1)
+
+## Exponential non-linear curve fitting using scipy.optimize.curve_fit
+    elif ~log & (fitfunc==exponential):
+        bline = []
+        # dummyspec = sum(sum(raw_data))/(xdim*ydim)
+        # popt_init,pcov_init=curve_fit(exponential, ewin, dummyspec[fit_start_ch:fit_end_ch],bounds=bounds,p0=[0,0],maxfev=maxfev,method=method,verbose = 0)
+        pbar1 = tqdm(total = (xdim)*(ydim),desc = "Background subtracting")
+        for i in range(xdim):
+            for j in range(ydim):
+                popt_exp,pcov_exp=curve_fit(exponential, ewin, lba_raw_normalized[i,j,fit_start_ch:fit_end_ch],maxfev=maxfev,method=method,verbose = 0
+                                          ,p0=[0,0], ftol=ftol, gtol=gtol, xtol=xtol)
+                a,b = popt_exp
+                if threshmask[i,j]:
+                    bline = np.append(bline,b)
+                bg_pl_SI[i,j,fit_start_ch:] = raw_data[i,j,fit_start_ch:] - exponential(energy_axis[fit_start_ch:],a,b)
+                pbar1.update(1)
+
+## Given r values of SI, refit background using a linear combination of power laws, using either 5/95 percentile or 20/80 percentile r values.
+    if 'lc' in kwargs.keys():
+        lc = kwargs['lc']
+    else:
+        lc = False
+
+    if lc & (fitfunc==powerlaw):
+        if 'nstd' in kwargs.keys():
+            nstd = kwargs['nstd']
+        else:
+            nstd = 2
+        bg_lcpl_SI = np.zeros_like(raw_data)
+        rmu,rstd = norm.fit(rline)
+        rmin = rmu - nstd*rstd
+        rmax = rmu + nstd*rstd
+        if nstd == 2:
+            print('5th percentile power law = {}'.format(rmin))
+            print('95th percentile power law = {}'.format(rmax))
+        elif nstd == 1:
+            print('20th percentile power law = {}'.format(rmin))
+            print('80th percentile power law = {}'.format(rmax))
+        else:
+            print('Min power law = {}'.format(rmin))
+            print('Max power law = {}'.format(rmax))
+        B = np.reshape(lba_raw_normalized[:,:,fit_start_ch:fit_end_ch],((xdim*ydim),len(ewin)))
+        A = np.zeros((len(ewin),2))
+        A[:,0] = ewin**(-rmin)
+        A[:,1] = ewin**(-rmax)
+        X = qrnorm(A,B.T)
+        E = np.zeros((len(esub),2))
+        E[:,0] = esub**(-rmin)
+        E[:,1] = esub**(-rmax)
+        bgndLCPLline = np.dot(X.T,E.T)
+        bgndLCPL = np.reshape(bgndLCPLline,(xdim,ydim,len(esub)))
+        bg_lcpl_SI[:,:,fit_start_ch:] = raw_data[:,:,fit_start_ch:] - bgndLCPL
+        return bg_pl_SI, bg_lcpl_SI
+
+### Testing
+    elif lc & (fitfunc==exponential):
+        if 'nstd' in kwargs.keys():
+            nstd = kwargs['nstd']
+        else:
+            nstd = 2
+        bg_lcpl_SI = np.zeros_like(raw_data)
+        bmu,bstd = norm.fit(bline)
+        bmin = bmu - nstd*bstd
+        bmax = bmu + nstd*bstd
+        if nstd == 2:
+            print('5th percentile exponential = {}'.format(bmin))
+            print('95th percentile exponential = {}'.format(bmax))
+        elif nstd == 1:
+            print('20th percentile exponential = {}'.format(bmin))
+            print('80th percentile exponential = {}'.format(bmax))
+        else:
+            print('Min exponential = {}'.format(bmin))
+            print('Max exponential = {}'.format(bmax))
+        B = np.reshape(lba_raw_normalized[:,:,fit_start_ch:fit_end_ch],((xdim*ydim),len(ewin)))
+        A = np.zeros((len(ewin),2))
+        A[:,0] = np.exp(-bmin*ewin)
+        A[:,1] = np.exp(-bmax*ewin)
+        X = qrnorm(A,B.T)
+        E = np.zeros((len(esub),2))
+        E[:,0] = np.exp(-bmin*esub)
+        E[:,1] = np.exp(-bmax*esub)
+        bgndLCPLline = np.dot(X.T,E.T)
+        bgndLCPL = np.reshape(bgndLCPLline,(xdim,ydim,len(esub)))
+        bg_lcpl_SI[:,:,fit_start_ch:] = raw_data[:,:,fit_start_ch:] - bgndLCPL
+        return bg_pl_SI, bg_lcpl_SI
+
+    else:
+        return bg_pl_SI
+
+def bgsub_1D(raw_data, energy_axis, edge, **kwargs):
+    """
+    Full background subtraction function for the 1D case-
+    Optional LBA, log fitting, LCPL, and exponential fitting.
+    For more information on non-linear fitting function, see information at https://docs.scipy.org/doc/scipy/reference/generated/scipy.optimize.curve_fit.html
+
+    Inputs:
+    raw_data - 1D spectrum
+    energy_axis - corresponding energy axis
+    edge - edge parameters defined by KEM convention
+
+    **kawrgs:
+    fit - choose the type of background fit, default == 'pl' == Power law. Can also use 'exp'== Exponential, 'lin' == Linear, 'lcpl' == LCPL.
+    log - Boolean, if true, log transform data and fit using QR factorization, default == False.
+    nstd - Standard deviation spread of r error from non-linear power law fitting. Default == 100.
+    ftol - default to 0.0005, Relative error desired in the sum of squares.
+    gtol - default to 0.00005, Orthogonality desired between the function vector and the columns of the Jacobian.
+    xtol - default to None, Relative error desired in the approximate solution.
+    maxfev - default to 50000, Only change if you are consistenly catching runtime errors and loosening gtol/ftols are not making a good enough fit.
+    method - default is 'trf', see https://docs.scipy.org/doc/scipy/reference/generated/scipy.optimize.least_squares.html#scipy.optimize.least_squares for description of methods
+    Note: may need stricter tolerances on ftol/gtol for noisier data. Anecdotally, a stricter gtol (as low as 1e-8) has a larger effect on the quality of the bgsub.
+
+    Outputs:
+    bg_1D - background spectrum
+    """
+    fit_start_ch = eVtoCh(edge[0], energy_axis)
+    fit_end_ch = eVtoCh(edge[1], energy_axis)
+    zdim = len(raw_data)
+    ewin = energy_axis[fit_start_ch:fit_end_ch]
+    esub = energy_axis[fit_start_ch:]
+    bg_1D = np.zeros_like(raw_data)
+    fy = np.zeros((1,zdim))
+    fy[0,:] = raw_data
+
+## Either fast fitting -> log fitting, Or slow fitting -> non-linear fitting
+    if 'log' in kwargs.keys():
+        log = kwargs['log']
+    else:
+        log = False
+
+## Fitting parameters for non-linear curve fitting if non-log based fitting
+        if 'ftol' in kwargs.keys():
+            ftol = kwargs['ftol']
+        else:
+            ftol = 1e-8
+        if 'gtol' in kwargs.keys():
+            gtol = kwargs['gtol']
+        else:
+            gtol = 1e-8
+        if 'xtol' in kwargs.keys():
+            xtol = kwargs['xtol']
+        else:
+            xtol = 1e-8
+        if 'maxfev' in kwargs.keys():
+            maxfev = kwargs['maxfev']
+        else:
+            maxfev = 50000
+        if 'method' in kwargs.keys():
+            method = kwargs['method']
+        else:
+            method = 'trf'
+
+## Determine if fitting is power law or exponenetial
+    if 'fit' in kwargs.keys():
+        fit = kwargs['fit']
+        if fit == 'exp':
+            fitfunc = exponential
+            bounds = ([0, 0], [np.inf, np.inf])
+        elif fit == 'pl':
+            fitfunc = powerlaw
+        elif fit == 'lcpl':
+            fitfunc = lcpowerlaw
+        elif fit == 'lin':
+            fitfunc = linear
+        else:
+            print('Did not except fitting function, please use either \'pl\' for powerlaw, \'exp\' for exponential, \'lin\' for linear or \'lcpl\' for LCPL.')
+    else:
+        fitfunc = powerlaw
+
+## If fast fitting linear background, find fit using qr factorization
+    if fitfunc==linear:
+        Blin = fy[:,fit_start_ch:fit_end_ch]
+        Alin = np.zeros((len(ewin),2))
+        Alin[:,0] = np.ones(len(ewin))
+        Alin[:,1] = ewin
+        Xlin = qrnorm(Alin,Blin.T)
+        Elin = np.zeros((len(esub),2))
+        Elin[:,0] = np.ones(len(esub))
+        Elin[:,1] = esub
+        bgndLINline = np.dot(Xlin.T,Elin.T)
+        bg_1D[fit_start_ch:] = raw_data[fit_start_ch:] - bgndLINline
+
+## If fast log fitting and powerlaw, find fit using qr factorization
+    elif log & (fitfunc==powerlaw):
+        Blog = fy[:,fit_start_ch:fit_end_ch]
+        Alog = np.zeros((len(ewin),2))
+        Alog[:,0] = np.ones(len(ewin))
+        Alog[:,1] = np.log(ewin)
+        Xlog = qrnorm(Alog,np.log(abs(Blog.T)))
+        Elog = np.zeros((len(esub),2))
+        Elog[:,0] = np.ones(len(esub))
+        Elog[:,1] = np.log(esub)
+        bgndPLline = np.exp(np.dot(Xlog.T,Elog.T))
+        bg_1D[fit_start_ch:] = raw_data[fit_start_ch:] - bgndPLline
+
+## If fast log fitting and exponential, find fit using qr factorization
+    elif log & (fitfunc==exponential):
+        Bexp = fy[:,fit_start_ch:fit_end_ch]
+        Aexp = np.zeros((len(ewin),2))
+        Aexp[:,0] = np.ones(len(ewin))
+        Aexp[:,1] = ewin
+        Xexp = qrnorm(Aexp,np.log(abs(Bexp.T)))
+        Eexp = np.zeros((len(esub),2))
+        Eexp[:,0] = np.ones(len(esub))
+        Eexp[:,1] = esub
+        bgndEXPline = np.exp(np.dot(Xexp.T,Eexp.T))
+        bg_1D[fit_start_ch:] = raw_data[fit_start_ch:] - bgndEXPline
+
+## Power law non-linear curve fitting using scipy.optimize.curve_fit
+    elif ~log & (fitfunc==powerlaw):
+        popt_pl,pcov_pl=curve_fit(powerlaw, ewin, raw_data[fit_start_ch:fit_end_ch],maxfev=maxfev,method=method,
+                                  verbose = 0, ftol=ftol, gtol=gtol, xtol=xtol)
+        c,r = popt_pl
+        bg_1D[fit_start_ch:] = raw_data[fit_start_ch:] - powerlaw(energy_axis[fit_start_ch:],c,r)
+
+## Exponential non-linear curve fitting using scipy.optimize.curve_fit
+    elif ~log & (fitfunc==exponential):
+        popt_exp,pcov_exp=curve_fit(exponential, ewin, raw_data[fit_start_ch:fit_end_ch],maxfev=maxfev,method=method,
+                                    verbose = 0,p0=[0,0], ftol=ftol, gtol=gtol, xtol=xtol)
+        a,b = popt_exp
+        bg_1D[fit_start_ch:] = raw_data[fit_start_ch:] - exponential(energy_axis[fit_start_ch:],a,b)
+
+## LCPL non-linear curve fitting using scipy.optimize.curve_fit
+    elif fitfunc==lcpowerlaw:
+        if 'nstd' in kwargs.keys():
+            nstd = kwargs['nstd']
+        else:
+            nstd = 100
+        popt_pl,pcov_pl=curve_fit(powerlaw, ewin, raw_data[fit_start_ch:fit_end_ch],maxfev=maxfev,method=method,
+                                  verbose = 0, ftol=ftol, gtol=gtol, xtol=xtol)
+        c,r = popt_pl
+        perr = np.sqrt(np.diag(pcov_pl))
+        rstd = perr[1]
+        popt_lcpl,pcov_lcpl=curve_fit(lcpowerlaw, ewin, raw_data[fit_start_ch:fit_end_ch],maxfev=maxfev,method=method,
+                                    verbose = 0,p0=[c/2,r-nstd*rstd,c/2,r+nstd*rstd], ftol=ftol, gtol=gtol, xtol=xtol)
+        c1,r1,c2,r2 = popt_lcpl
+        bg_1D[fit_start_ch:] = raw_data[fit_start_ch:] - lcpowerlaw(energy_axis[fit_start_ch:],c1,r1,c2,r2)
+
+    return bg_1D
+
+def edgemap(raw_data, energy_axis, edge):
+	"""
+	Inputs:
+	raw_data - SI
+	energy_axis - corresponding energy axis
+	edge - edge parameters corresponding to desired element defined by KEM convention
+
+	Outputs:
+	dummymap - edgemap
+	"""
+	xdim, ydim, zdim = np.shape(raw_data)
+	dummymap = np.zeros((xdim,ydim))
+	integration_start_ch = eVtoCh(edge[2], energy_axis)
+	integration_end_ch = eVtoCh(edge[3], energy_axis)
+	for i in range(xdim):
+		for j in range(ydim):
+			dummymap[i,j] = sum(raw_data[i,j,integration_start_ch:integration_end_ch])
+	return dummymap
+
+def fit_check(raw_data,energy_axis):
+    # output widgets
+    output = widgets.Output()
+    plot_output = widgets.Output()
+
+    map = np.sum(raw_data, axis=2)
+    disp = energy_axis[1]-energy_axis[0]
+
+    dx,dy = np.shape(map)
+    sumspec = sum(sum(raw_data))
+    fit = bgsub_1D(sumspec,energy_axis,[np.min(energy_axis),np.max(energy_axis)])
+
+    fig, (ax1,ax2) = plt.subplots(1,2,figsize=(9.5, 3.5))
+    ax1.matshow(map,cmap='gray')
+    ax2.plot(energy_axis, sumspec, color='C0',alpha=0.8,label='raw')
+    ax2.plot(energy_axis, sumspec-fit, color='C1',alpha=0.8,label='fit')
+    ax2.plot(energy_axis, fit, color='C2',alpha=0.8,label='residual')
+    ax2.axhline(0, color='k', linestyle='--')
+    ax2.legend()
+    #ax2.set_xlim(edge[0], edge[3]+50)
+    ax2.set_xlabel('Energy Loss (eV)')
+    ax2.set_ylabel('Counts (a.u.)')
+    ax2.set_yticks([0])
+
+    # widgets
+    dx_slider = widgets.IntSlider(value=0, min=0, max=dx-1, step=1, description='x pos')
+    dy_slider = widgets.IntSlider(value=0, min=0, max=dy-1, step=1, description='y pos')
+    de_range_slider = widgets.FloatRangeSlider(value=(np.min(energy_axis), np.max(energy_axis)), min=np.min(energy_axis), max= np.max(energy_axis), step=disp, description='Fit window')
+    dd_range_slider = widgets.FloatRangeSlider(value=(np.min(energy_axis), np.max(energy_axis)), min=np.min(energy_axis), max= np.max(energy_axis), step=disp, description='Display window')
+    check_region = widgets.Checkbox(value=False,description='Single Pixel')
+    dropdown = widgets.Dropdown(value='Power Law',options=['Power Law', 'Linear', 'Exponential', 'Power Law (Log)', 'Exponential (Log)'],description='Fit Type')
+
+    # update display with updated widgets
+    def update_fit(xx,yy,ee,dd,check,drop):
+        warnings.filterwarnings("ignore", category=RuntimeWarning)
+        output.clear_output()
+        plot_output.clear_output()
+        [l.remove() for l in ax1.lines]
+        [l.remove() for l in ax2.lines]
+
+        dd_ch = [eVtoCh(dd[0],energy_axis),eVtoCh(dd[1],energy_axis)]
+        if ee[0]==ee[1]:
+            ee= [ee[0],ee[0]+disp]
+        cc = [eVtoCh(ee[0],energy_axis),eVtoCh(ee[1],energy_axis)]
+
+        if check:
+            spec = sum(sum(raw_data[xx:xx+1,yy:yy+1,:]))
+            box = [[xx-0.5,xx-0.5,xx+0.5,xx+0.5,xx-0.5],[yy-0.5,yy+0.5,yy+0.5,yy-0.5,yy-0.5]]
+        else:
+            spec = sum(sum(raw_data))
+
+        if drop == 'Linear':
+            fit = bgsub_1D(spec,energy_axis,[ee[0],ee[1]],fit='lin')
+        elif drop == 'Exponential':
+            fit = bgsub_1D(spec,energy_axis,[ee[0],ee[1]],fit='exp')
+        elif drop == 'Power Law (Log)':
+            fit = bgsub_1D(spec,energy_axis,[ee[0],ee[1]],fit='pl',log=True)
+        elif drop == 'Exponential (Log)':
+            fit = bgsub_1D(spec,energy_axis,[ee[0],ee[1]],fit='exp',log=True)
+        else:
+            fit = bgsub_1D(spec,energy_axis,[ee[0],ee[1]])
+
+
+        with plot_output:
+            ax2.clear()
+            [l.remove() for l in ax1.lines]
+            [l.remove() for l in ax2.lines]
+            if check:
+                ax1.plot(box[1],box[0],color='C0')
+            ax2.plot(energy_axis, spec, color='C0',alpha=0.8,label='raw')
+            ax2.plot(energy_axis[cc[0]:], spec[cc[0]:]-fit[cc[0]:], color='C1',alpha=0.8,label='fit')
+            ax2.plot(energy_axis, fit, color='C2',alpha=0.8,label='residual')
+            ax2.axvspan(ee[0], ee[1], color='b', alpha=0.2, lw=0)
+            # ax2.axvline(ee[0],spec.min(),spec.max(),alpha=0.7,linestyle='--',color='k')
+            # ax2.axvline(ee[1],spec.min(),spec.max(),alpha=0.7,linestyle='--',color='k')
+            ax2.legend()
+            ax2.axhline(0, color='k',alpha=0.8, linestyle='--')
+            ax2.set_ylim(np.min((np.min(fit[dd_ch[0]:dd_ch[1]],0))),np.max(spec[dd_ch[0]:dd_ch[1]]))
+            ax2.set_xlim(dd[0],dd[1])
+
+            ax2.set_xlabel('Energy Loss (eV)')
+            ax2.set_ylabel('Counts (a.u.)')
+            ax2.set_yticks([0])
+            plt.show()
+#         warnings.filterwarnings("default", category=RuntimeWarning)
+    # update widgets
+    def dx_eventhandler(change):
+        update_fit(change.new,dy_slider.value,de_range_slider.value,dd_range_slider.value,check_region.value,dropdown.value)
+    def dy_eventhandler(change):
+        update_fit(dx_slider.value,change.new,de_range_slider.value,dd_range_slider.value,check_region.value,dropdown.value)
+    def de_range_eventhandler(change):
+        update_fit(dx_slider.value,dy_slider.value,change.new,dd_range_slider.value,check_region.value,dropdown.value)
+    def dd_range_eventhandler(change):
+        update_fit(dx_slider.value,dy_slider.value,de_range_slider.value,change.new,check_region.value,dropdown.value)
+    def checkbox_eventhandler(change):
+        update_fit(dx_slider.value,dy_slider.value,de_range_slider.value,dd_range_slider.value,change.new,dropdown.value)
+    def dropdown_eventhandler(change):
+        update_fit(dx_slider.value,dy_slider.value,de_range_slider.value,dd_range_slider.value,check_region.value,change.new)
+
+    # observe updated widgets
+    dx_slider.observe(dx_eventhandler,names='value')
+    dy_slider.observe(dy_eventhandler,names='value')
+    de_range_slider.observe(de_range_eventhandler,names='value')
+    dd_range_slider.observe(dd_range_eventhandler,names='value')
+    check_region.observe(checkbox_eventhandler,names='value')
+    dropdown.observe(dropdown_eventhandler,names='value')
+
+    # display
+    input_widgets_1 = widgets.HBox([dropdown,de_range_slider,dd_range_slider])
+    input_widgets_2 = widgets.HBox([check_region,dx_slider, dy_slider])
+    input_widgets = widgets.VBox([input_widgets_1,input_widgets_2])
+    display(input_widgets)
+
+def edge_check(bsub,energy_axis,edge=None):
+    # output widgets
+    output = widgets.Output()
+    plot_output = widgets.Output()
+
+    if edge==None:
+        edge = [energy_axis[0],energy_axis[-1],energy_axis[0],energy_axis[-1]]
+
+    map = edgemap(bsub, energy_axis, edge)
+
+    dx,dy = np.shape(map)
+    sumspec = sum(sum(bsub))
+
+    fig, (ax1,ax2) = plt.subplots(1,2,figsize=(9.5, 3.5))
+    ax1.matshow(map,cmap='gray')
+    ax2.plot(energy_axis, sumspec, color='C0')
+    ax2.set_xlim(edge[0], edge[3]+50)
+    ax2.set_xlabel('Energy Loss (eV)')
+    ax2.set_ylabel('Counts (a.u.)')
+    specmin = sumspec[eVtoCh(edge[3]+50,energy_axis)]
+    ymin = np.min(((specmin-np.abs(specmin/10)),-np.abs(specmin/10)))
+    ymax = np.max(sumspec[eVtoCh(edge[0],energy_axis):eVtoCh(edge[3]+50,energy_axis)])
+    ax2.set_ylim(ymin,ymax*1.1)
+    ax2.set_yticks([0])
+
+    # widgets
+    dx_range_slider_1 = widgets.IntRangeSlider(value=(0, dx-1), min=0, max=dx-1, step=1, description='x range')
+    dy_range_slider_1 = widgets.IntRangeSlider(value=(0, dy-1), min=0, max=dy-1, step=1, description='y range')
+    dx_range_slider_2 = widgets.IntRangeSlider(value=(0, dx-1), min=0, max=dx-1, step=1, description='x range')
+    dy_range_slider_2 = widgets.IntRangeSlider(value=(0, dy-1), min=0, max=dy-1, step=1, description='y range')
+    check_region_1 = widgets.Checkbox(value=False,description='Region 1')
+    check_region_2 = widgets.Checkbox(value=False,description='Region 2')
+
+    # update display with updated widgets
+    def update_edgemap(xr_1,yr_1,xr_2,yr_2,check_1,check_2):
+        warnings.filterwarnings("ignore", category=RuntimeWarning)
+        output.clear_output()
+        plot_output.clear_output()
+        [l.remove() for l in ax1.lines]
+        [l.remove() for l in ax2.lines]
+
+        if check_1:
+            xmin_1, xmax_1 = xr_1[0],xr_1[1]
+            ymin_1, ymax_1 = yr_1[0],yr_1[1]
+            spec_1 = sum(sum(bsub[xmin_1:xmax_1+1,ymin_1:ymax_1+1,:]))
+            box_1 = [[xmin_1-0.5,xmin_1-0.5,xmax_1+0.5,xmax_1+0.5,xmin_1-0.5],[ymin_1-0.5,ymax_1+0.5,ymax_1+0.5,ymin_1-0.5,ymin_1-0.5]]
+
+        if check_2:
+            xmin_2, xmax_2 = xr_2[0],xr_2[1]
+            ymin_2, ymax_2 = yr_2[0],yr_2[1]
+            spec_2 = sum(sum(bsub[xmin_2:xmax_2+1,ymin_2:ymax_2+1,:]))
+            box_2 = [[xmin_2-0.5,xmin_2-0.5,xmax_2+0.5,xmax_2+0.5,xmin_2-0.5],[ymin_2-0.5,ymax_2+0.5,ymax_2+0.5,ymin_2-0.5,ymin_2-0.5]]
+
+        with plot_output:
+            if check_1 & ~check_2:
+                [l.remove() for l in ax1.lines]
+                [l.remove() for l in ax2.lines]
+                ax1.plot(box_1[1],box_1[0],color='C0')
+                ax2.plot(energy_axis, spec_1, color='C0')
+                specmin = spec_1[eVtoCh(edge[3]+50,energy_axis)]
+                ymin = np.min(((specmin-np.abs(specmin/10)),-np.abs(specmin/10)))
+                ymax = np.max(spec_1[eVtoCh(edge[0],energy_axis):eVtoCh(edge[3]+50,energy_axis)])
+                ax2.set_ylim(ymin,ymax*1.1)
+            if ~check_1 & check_2:
+                [l.remove() for l in ax1.lines]
+                [l.remove() for l in ax2.lines]
+                ax1.plot(box_2[1],box_2[0],color='C0')
+                ax2.plot(energy_axis, spec_2, color='C0')
+                specmin = spec_2[eVtoCh(edge[3]+50,energy_axis)]
+                ymin = np.min(((specmin-np.abs(specmin/10)),-np.abs(specmin/10)))
+                ymax = np.max(spec_2[eVtoCh(edge[0],energy_axis):eVtoCh(edge[3]+50,energy_axis)])
+                ax2.set_ylim(ymin,ymax*1.1)
+            if check_1 & check_2:
+                [l.remove() for l in ax1.lines]
+                [l.remove() for l in ax2.lines]
+                ax1.plot(box_1[1],box_1[0],color='C0')
+                ax2.plot(energy_axis, spec_1, color='C0')
+                ax1.plot(box_2[1],box_2[0],color='C1')
+                ax2.plot(energy_axis, spec_2, color='C1')
+                specmin = np.min((spec_1[eVtoCh(edge[3]+50,energy_axis)],spec_2[eVtoCh(edge[3]+50,energy_axis)]))
+                ymin = np.min(((specmin-np.abs(specmin/10)),-np.abs(specmin/10)))
+                ymax = np.max((np.max(spec_1[eVtoCh(edge[0],energy_axis):eVtoCh(edge[3]+50,energy_axis)]),np.max(spec_2[eVtoCh(edge[0],energy_axis):eVtoCh(edge[3]+50,energy_axis)])))
+                ax2.set_ylim(ymin,ymax*1.1)
+            plt.show()
+        warnings.filterwarnings("default", category=RuntimeWarning)
+    # update widgets
+    def dx_range_eventhandler_1(change):
+        update_edgemap(change.new,dy_range_slider_1.value,
+                       dx_range_slider_2.value,dy_range_slider_2.value,check_region_1.value,check_region_2.value)
+    def dy_range_eventhandler_1(change):
+        update_edgemap(dx_range_slider_1.value,change.new,
+                       dx_range_slider_2.value,dy_range_slider_2.value,check_region_1.value,check_region_2.value)
+    def dx_range_eventhandler_2(change):
+        update_edgemap(dx_range_slider_1.value,dy_range_slider_1.value,
+                       change.new,dy_range_slider_2.value,check_region_1.value,check_region_2.value)
+    def dy_range_eventhandler_2(change):
+        update_edgemap(dx_range_slider_1.value,dy_range_slider_1.value,
+                       dx_range_slider_2.value,change.new,check_region_1.value,check_region_2.value)
+    def checkbox_eventhandler_1(change):
+        update_edgemap(dx_range_slider_1.value,dy_range_slider_1.value,
+                       dx_range_slider_2.value,dy_range_slider_2.value,change.new,check_region_2.value)
+    def checkbox_eventhandler_2(change):
+        update_edgemap(dx_range_slider_1.value,dy_range_slider_1.value,
+                       dx_range_slider_2.value,dy_range_slider_2.value,check_region_1.value,change.new)
+
+    # observe updated widgets
+    dx_range_slider_1.observe(dx_range_eventhandler_1,names='value')
+    dy_range_slider_1.observe(dy_range_eventhandler_1,names='value')
+    dx_range_slider_2.observe(dx_range_eventhandler_2,names='value')
+    dy_range_slider_2.observe(dy_range_eventhandler_2,names='value')
+    check_region_1.observe(checkbox_eventhandler_1,names='value')
+    check_region_2.observe(checkbox_eventhandler_2,names='value')
+
+    # display
+    input_widgets_1 = widgets.HBox([check_region_1,dx_range_slider_1, dy_range_slider_1])
+    input_widgets_2 = widgets.HBox([check_region_2,dx_range_slider_2, dy_range_slider_2])
+    input_widgets = widgets.VBox([input_widgets_1,input_widgets_2])
+    display(input_widgets)
+
+def saveTiff_clip(array, minclip, maxclip, title, path, save=True):
+    """
+    This function will clip out min and max percentile grey values of array and plot result. Defaults to saving as tiff.
+
+    Inputs:
+    array - 2D image
+    minclip - minimum percentile cutoff
+    maxclip - maximum percentile cutoff
+    title - title of image
+    path - save path
+    save - defaults True
+    """
+    clipped_array = np.clip(array, np.percentile(array.ravel(), minclip), np.percentile(array.ravel(), maxclip))
+
+    title = title + '_clip' + str(minclip) + '-' + str(maxclip)
+    fig,ax=plt.subplots(figsize = (4,8))
+    plt.imshow(clipped_array,cmap='gray')
+    plt.title(title)
+    #plt.colorbar()
+    map_max=np.amax(clipped_array)
+    map_min=np.amin(clipped_array)
+
+    if save:
+        saveTiff(clipped_array, path+title)
+    return
+
+################################################################################
+
+def easyplot(title = '', figsize = (8,5)):
+    """
+    1D spectra plot axis
+    """
+    fig, ax = plt.subplots(figsize = figsize)
+    plt.ylabel('Counts (a.u.)')
+    plt.xlabel('Energy loss (eV)')
+    plt.title(title)
+    plt.yticks([0])
+
+
+def easyrgb(imstack,cstack=None):
+    """
+    This function supports creation of rgb and cymk images.
+
+    Input:
+    imstack - list of 2D images to be made into a rgb stack
+    cstack - list of corresponding colors, default is 'r','g','b','c','m','y'.
+
+    Output:
+    rgb - color image generated by function
+    """
+    imstack = np.dstack(imstack)
+    xdim,ydim,zdim = np.shape(imstack)
+
+    if np.shape(cstack)==():
+        cstack = ['r','g','b','c','m','y']
+        cstack = cstack[:zdim]
+
+    for k in range(zdim):
+        imstack[:,:,k] = imstack[:,:,k] - np.min(imstack[:,:,k])
+
+    carr = np.array(cstack)
+
+    rpos = np.squeeze(np.argwhere(carr=='r'))
+    gpos = np.squeeze(np.argwhere(carr=='g'))
+    bpos = np.squeeze(np.argwhere(carr=='b'))
+    cpos = np.squeeze(np.argwhere(carr=='c'))
+    mpos = np.squeeze(np.argwhere(carr=='m'))
+    ypos = np.squeeze(np.argwhere(carr=='y'))
+
+    rgb = np.zeros((xdim,ydim,3))
+
+    if np.shape(rpos) != (0,):
+        rgb[:,:,0] = imstack[:,:,rpos]
+    if np.shape(gpos) != (0,):
+        rgb[:,:,1] = imstack[:,:,gpos]
+    if np.shape(bpos) != (0,):
+        rgb[:,:,2] = imstack[:,:,bpos]
+    if np.shape(cpos) != (0,):
+        rgb[:,:,1] += imstack[:,:,cpos]/2
+        rgb[:,:,2] += imstack[:,:,cpos]/2
+    if np.shape(mpos) != (0,):
+        rgb[:,:,0] += imstack[:,:,mpos]/2
+        rgb[:,:,2] += imstack[:,:,mpos]/2
+    if np.shape(ypos) != (0,):
+        rgb[:,:,0] += imstack[:,:,ypos]/2
+        rgb[:,:,1] += imstack[:,:,ypos]/2
+
+    rgb = rgb/np.max(rgb)
+
+    return rgb
+
+# def line_profile(edgemap,start,end):
+#     lp = skimage.measure.profile_line(edgemap,start,end,linewidth=np.max(np.shape(edgemap)),mode='mirror')
+#     line_x = np.linspace(start[1],end[1],np.max(np.shape(edgemap)))
+#     line_y = np.linspace(start[0],end[0],np.max(np.shape(edgemap)))
+#
+#     fig,ax = plt.subplots()
+#     ax.imshow(edgemap,cmap='gray')
+#     ax.plot(line_x,line_y )
+#     ax.set_title('Summing direction')
+#     return lp
+
+################################################################################
+############################### Obsolete functions##############################
+################################################################################
+
+def specload_norm(file):
+    """
+    outputs normalized SI
+
+    200910: obselete, use norm = True in "specload()" - bhg
+    """
+    return(specload(file)[0], specload(file)[1]/sum(specload(file)[1]))
+
+def normalization(lba, m):
+	return m*lba
+
+def lba(raw_data,energy_axis, edge, gfwhm):
+	"""
+	Inputs:
+	raw_data - SI
+	energy_axis - corresponding energy axis
+	edge - edge parameters defined by KEM convention
+	gfwhm - width of gaussian filter
+
+	Outputs:
+	lba_raw_normalized - local background averaged SI
+	"""
+	fit_start_ch = eVtoCh(edge[0], energy_axis)
+	fit_end_ch = eVtoCh(edge[1], energy_axis)
+	lba_raw = np.copy(raw_data)
+	xdim, ydim, zdim = np.shape(raw_data)
+	for energychannel in np.arange(fit_start_ch,fit_end_ch):
+		lba_raw[:,:,energychannel] = gaussian_filter(raw_data[:,:,energychannel],sigma=gfwhm/2.35)
+	lba_raw_normalized = np.copy(lba_raw)
+	pbar2 = tqdm(total = (xdim)*(ydim),desc = "Normalizing")
+	for i in range(xdim):
+		for j in range(ydim):
+			normalize,pcov_pl=curve_fit(normalization,lba_raw[i,j,fit_start_ch:fit_end_ch],raw_data[i,j,fit_start_ch:fit_end_ch])
+			lba_raw_normalized[i,j,fit_start_ch:fit_end_ch] = lba_raw[i,j,fit_start_ch:fit_end_ch]*normalize
+			pbar2.update(1)
+	return lba_raw_normalized
+
+
+# In curve fitting, there are tolerances values ftol and gtol. The default values seem to work well for most cases.
+# If the background subtraction is taking too long or the result is bad, you can try altering these parameters.
+# Read more on what the tolerance parameters do here: https://docs.scipy.org/doc/scipy/reference/generated/scipy.optimize.least_squares.html#scipy.optimize.least_squares
+
+def fit_pl_1d(raw_data, energy_axis, edge, ftol=0.00001, gtol=0.00001,xtol=None):
+    """
+    Berit : NOTE: YOU SHOULD USE SOMETHING ELSE INSTEAD, you can extract c,r values from bgsub_pl_1d. Background fit using scipy.optimize curve_fit for a power law- information at https://docs.scipy.org/doc/scipy/reference/generated/scipy.optimize.curve_fit.html
+
+    Inputs:
+    raw_data - 1D spectra
+    energy_axis - corresponding energy axis
+    edge - edge parameters defined by KEM convention
+    ftol - default to 0.00001, Relative error desired in the sum of squares.
+    gtol - default to 0.00001, Orthogonality desired between the function vector and the columns of the Jacobian.
+    xtol - default to None, Relative error desired in the approximate solution.
+
+    Outputs:
+    powerlaw(energy_axis[fit_start_ch:],c,r) - power law fit to spectra
+    """
+    fit_start_ch = eVtoCh(edge[0], energy_axis)
+    fit_end_ch = eVtoCh(edge[1], energy_axis)
+    bg_pl_SI = np.zeros_like(raw_data)
+    ## perform PL fit and background subtraction on each pixel.
+    popt_pl,pcov_pl=curve_fit(powerlaw, energy_axis[fit_start_ch:fit_end_ch], raw_data[fit_start_ch:fit_end_ch],maxfev=50000,method='trf',ftol=ftol,gtol=gtol,xtol=xtol,verbose = 0)
+    c,r = popt_pl
+    return powerlaw(energy_axis[fit_start_ch:],c,r)
+
+def bgsub_pl_1d(raw_data, energy_axis, edge, ftol=0.00001, gtol=0.00001,xtol=None,maxfev=50000):
+    """
+    Background subtraction using scipy.optimize curve_fit for a power law- information at https://docs.scipy.org/doc/scipy/reference/generated/scipy.optimize.curve_fit.html
+
+    Inputs:
+    raw_data - 1D spectra
+    energy_axis - corresponding energy axis
+    edge - edge parameters defined by KEM convention
+    ftol - default to 0.00001, Relative error desired in the sum of squares.
+    gtol - default to 0.00001, Orthogonality desired between the function vector and the columns of the Jacobian.
+    xtol - default to None, Relative error desired in the approximate solution.
+
+    Outputs:
+    bg_pl_SI - background subtracted spectra
+    """
+    fit_start_ch,fit_end_ch = eVtoCh(edge[0], energy_axis),eVtoCh(edge[1], energy_axis)
+    bg_pl_SI = np.zeros_like(raw_data)
+    ## perform PL fit and background subtraction on each pixel.
+    popt_pl,pcov_pl=curve_fit(powerlaw, energy_axis[fit_start_ch:fit_end_ch], raw_data[fit_start_ch:fit_end_ch],maxfev=maxfev,method='trf',ftol=ftol,gtol=gtol,xtol=xtol,verbose = 0)
+    c,r = popt_pl
+    bg_pl_SI[fit_start_ch:] = raw_data[fit_start_ch:] - powerlaw(energy_axis[fit_start_ch:],c,r)
+    return bg_pl_SI, c, r
+
+def bgsub_pl_SI(raw_data, energy_axis, edge, ftol=0.000001, gtol=0.000001,xtol=None,maxfev=50000):
+    """
+    Background subtraction using scipy.optimize curve_fit for a power law- information at https://docs.scipy.org/doc/scipy/reference/generated/scipy.optimize.curve_fit.html
+
+    Inputs:
+    raw_data - SI
+    energy_axis - corresponding energy axis
+    edge - edge parameters defined by KEM convention
+    ftol - default to 0.0005, Relative error desired in the sum of squares.
+    gtol - default to 0.00005, Orthogonality desired between the function vector and the columns of the Jacobian.
+    xtol - default to None, Relative error desired in the approximate solution.
+    Note: may need stricter tolerances on ftol/gtol for noisier data. Anecdotally, a stricter gtol (as low as 1e-8) has a larger effect on the quality of the bgsub.
+
+    Outputs:
+    bg_pl_SI - background subtracted SI
+    """
+    bg_pl_SI = np.zeros_like(raw_data)
+    fit_start_ch = eVtoCh(edge[0], energy_axis)
+    fit_end_ch = eVtoCh(edge[1], energy_axis)
+    xdim, ydim, zdim = np.shape(raw_data)
+    dummyspec = sum(sum(raw_data))/(np.shape(raw_data)[0]*np.shape(raw_data)[1])
+    popt_pl,pcov_pl=curve_fit(powerlaw, energy_axis[fit_start_ch:fit_end_ch], dummyspec[fit_start_ch:fit_end_ch],maxfev=maxfev,method='trf',verbose = 0, ftol=ftol, gtol=gtol,xtol=xtol)
+    c_guess, r_guess = popt_pl
+    ## perform PL fit and background subtraction on each pixel.
+    pbar = tqdm(total = (xdim)*(ydim),desc = "Background subtracting")
+    for i in range(xdim):
+        for j in range(ydim):
+            popt_pl,pcov_pl=curve_fit(powerlaw, energy_axis[fit_start_ch:fit_end_ch], raw_data[i,j,fit_start_ch:fit_end_ch],maxfev=maxfev,p0=(c_guess,r_guess),method='trf',verbose = 0, ftol=ftol, gtol=gtol,xtol=xtol)
+            c,r = popt_pl
+            bg_pl_SI[i,j,fit_start_ch:] = raw_data[i,j,fit_start_ch:] - powerlaw(energy_axis[fit_start_ch:],c,r)
+            pbar.update(1)
+    return bg_pl_SI
+
+
+def bgsub_pl_SI_lba(raw_data, energy_axis, edge, gfwhm, ftol=0.000001, gtol=0.000001,maxfev=50000):
+	"""
+	LBA filtering followed by background subtraction using scipy.optimize curve_fit for a power law- information at https://docs.scipy.org/doc/scipy/reference/generated/scipy.optimize.curve_fit.html
+	Inputs:
+	raw_data - SI
+	energy_axis - corresponding energy axis
+	edge - edge parameters defined by KEM convention
+	gfwhm - width of gaussian filter
+	ftol - default to 0.0005, Relative error desired in the sum of squares.
+	gtol - default to 0.00005, Orthogonality desired between the function vector and the columns of the Jacobian.
+	xtol - default to None, Relative error desired in the approximate solution.
+    maxfev - default to 50000, Only change if you are consistenly catching runtime errors and loosening gtol/ftols are not making a good enough fit.
+	Note: may need stricter tolerances on ftol/gtol for noisier data. Anecdotally, a stricter gtol (as low as 1e-8) has a larger effect on the quality of the bgsub.
+
+	Outputs:
+	bg_pl_SI - lba filtered/background subtracted SI
+	"""
+	fit_start_ch = eVtoCh(edge[0], energy_axis)
+	fit_end_ch = eVtoCh(edge[1], energy_axis)
+	lba_raw = np.copy(raw_data)
+	xdim, ydim, zdim = np.shape(raw_data)
+	for energychannel in np.arange(fit_start_ch,fit_end_ch):
+		lba_raw[:,:,energychannel] = gaussian_filter(raw_data[:,:,energychannel],sigma=gfwhm/2.35)
+	lba_raw_normalized = np.copy(lba_raw)
+	pbar2 = tqdm(total = (xdim)*(ydim),desc = "Normalizing")
+	for i in range(xdim):
+		for j in range(ydim):
+			normalize,pcov_pl=curve_fit(normalization,lba_raw[i,j,fit_start_ch:fit_end_ch],raw_data[i,j,fit_start_ch:fit_end_ch])
+			lba_raw_normalized[i,j,fit_start_ch:fit_end_ch] = lba_raw[i,j,fit_start_ch:fit_end_ch]*normalize
+			pbar2.update(1)
+	bg_pl_SI = np.zeros_like(raw_data)
+	xdim, ydim, zdim = np.shape(raw_data)
+	dummyspec = sum(sum(lba_raw_normalized))/(np.shape(raw_data)[0]*np.shape(raw_data)[1])
+	popt_pl,pcov_pl=curve_fit(powerlaw, energy_axis[fit_start_ch:fit_end_ch], dummyspec[fit_start_ch:fit_end_ch],maxfev=maxfev,method='trf',verbose = 0)
+	c_guess, r_guess = popt_pl
+    ## perform PL fit and background subtraction on each pixel.
+	pbar = tqdm(total = (xdim)*(ydim),desc = "Background subtracting")
+	for i in range(xdim):
+		for j in range(ydim):
+			popt_pl,pcov_pl=curve_fit(powerlaw, energy_axis[fit_start_ch:fit_end_ch], lba_raw_normalized[i,j,fit_start_ch:fit_end_ch],maxfev=maxfev,p0=(c_guess,r_guess),method='trf',verbose = 0, ftol=ftol, gtol=gtol)
+			c,r = popt_pl
+			bg_pl_SI[i,j,fit_start_ch:] = raw_data[i,j,fit_start_ch:] - powerlaw(energy_axis[fit_start_ch:],c,r)
+			pbar.update(1)
+	return bg_pl_SI
+
+def easyrgbv1(path, red, green, blue, rtitle, btitle, gtitle, rscale, gscale, bscale, cutoff,save,**kwargs):
+    """
+    Inputs:
+    path - save path
+    red, green, blue - edge map arrays corresponding to rgb color
+    rtitle, gtitle, btitle - corresponding variable names for titling
+    rscale, gscale, bscale - optional downscaling of individual elements
+    cutoff - [min,max] percentile values to keep in rgb map
+    save - optional save rgb map as tiff stack
+    **kwargs - **kwargs for plt.subplots
+
+    Outputs:
+    rgb - 3D array of rgb values.
+
+    """
+    if np.max([rscale,gscale,bscale]) >1.:
+        print('Error: Cannot scale RGB map greater than 1')
+        return
+    if cutoff[0]!=0. or cutoff[1] !=100.:
+        rmin,rmax = int(np.percentile(red, cutoff[0])),int(np.percentile(red, cutoff[1]))
+        red = np.clip(red,rmin,rmax)
+        red = red - rmin
+    red = rscale*red/np.max(red)
+    if cutoff[0]!=0. or cutoff[1] !=100.:
+        gmin,gmax = int(np.percentile(green, cutoff[0])),int(np.percentile(green, cutoff[1]))
+        green = np.clip(green,gmin,gmax)
+        green = green - gmin
+    green = gscale*green/np.max(green)
+    if blue == '_':
+        blue = np.zeros(np.shape(red))
+        title = 'R-' + rtitle + '_G-' + gtitle
+    else:
+        if cutoff[0]!=0. or cutoff[1] !=100.:
+            bmin,bmax = int(np.percentile(blue, cutoff[0])),int(np.percentile(blue, cutoff[1]))
+            blue = np.clip(blue,bmin,bmax)
+            blue = blue - bmin
+        title = 'R-' + rtitle + '_G-' + gtitle + '_B-' + btitle
+        blue = bscale*blue/np.max(blue)
+    rgb = np.dstack((red,green,blue))
+    if save:
+        saveTiff(rgb,path+title)
+    fig, ax = plt.subplots(**kwargs)
+    plt.title(title)
+    plt.imshow(rgb)
+    return rgb
+
+## generate a cmyk map
+def easycmykv1(path, cyan, magenta, yellow, ctitle, mtitle, ytitle, cscale, mscale, yscale, cutoff,save,**kwargs):
+    """
+    Inputs:
+    path - save path
+    cyan, magenta, yellow - edge map arrays corresponding to cmyk color
+    ctitle, mtitle, ytitle - corresponding variable names for titling
+    cscale, mscale, yscale - optional downscaling of individual elements
+    cutoff - [min,max] percentile values to keep in rgb map
+    save - optional save rgb map as tiff stack
+    **kwargs - **kwargs for plt.subplots
+
+    Outputs:
+    rgb - 3D array of rgb values.
+
+    """
+    if np.max([cscale,mscale,yscale]) >1.:
+        print('Error: Cannot scale CYMK map greater than 1')
+        return
+    if cutoff[0]!=0. or cutoff[1] !=100.:
+        cmin,cmax = int(np.percentile(cyan, cutoff[0])),int(np.percentile(cyan, cutoff[1]))
+        cyan = np.clip(cyan,cmin,cmax)
+        cyan = cyan - cmin
+    cyan = cscale*cyan/np.max(cyan)
+    if cutoff[0]!=0. or cutoff[1] !=100.:
+        mmin,mmax = int(np.percentile(magenta, cutoff[0])),int(np.percentile(magenta, cutoff[1]))
+        magenta = np.clip(magenta,mmin,mmax)
+        magenta = magenta - mmin
+    magenta = mscale*magenta/np.max(magenta)
+    if yellow == '_':
+        yellow = np.zeros(np.shape(magenta))
+        title = 'C-' + ctitle + '_M-' + mtitle
+    else:
+        if cutoff[0]!=0. or cutoff[1] !=100.:
+            ymin,ymax = int(np.percentile(yellow, cutoff[0])),int(np.percentile(yellow, cutoff[1]))
+            yellow = np.clip(yellow,ymin,ymax)
+            yellow = yellow - ymin
+        yellow = yscale*yellow/np.max(yellow)
+        title = 'C-' + ctitle + '_M-' + mtitle + '_Y-' + ytitle
+    stack = np.dstack((cyan,magenta,yellow))
+    cmy = 1-stack
+    for i in range(np.shape(cmy)[0]):
+        for j in range(np.shape(cmy)[1]):
+            cmy[i,j,:] = cmy[i,j,:] - np.min(cmy[i,j,:])
+    if save:
+        saveTiff(stack,path+title)
+    fig, ax = plt.subplots(**kwargs)
+    plt.title(title)
+    plt.imshow(cmy)
+    return(stack)
